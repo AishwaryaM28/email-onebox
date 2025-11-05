@@ -27,7 +27,7 @@ export default function Home() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const API_BASE = 'http://localhost:3000'
+  const API_BASE = 'https://email-onebox-backend-hs8s.onrender.com/ || http://localhost:3000'
 
   const fetchEmails = async (): Promise<void> => {
     try {
