@@ -21,7 +21,6 @@
 ✅ **3. AI Categorization** - Auto-tags emails into 5 categories  
 ✅ **4. Slack Integration** - Sends notifications for interested leads  
 ✅ **5. Web Dashboard** - Search, filter, and view all emails  
-❌ **6. AI Replies** - Not implemented (bonus feature)
 
 **Completion: 5/6 features (83%)**
 
