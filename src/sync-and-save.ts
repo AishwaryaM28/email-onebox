@@ -109,111 +109,126 @@ function categorizeEmail(subject: string, body: string): string {
 let emailCount = 0;
 let skippedCount = 0;
 
-async function syncEmails(): Promise<void> {
-  try {
-    console.log('📊 Setting up Elasticsearch...');
-    await setupElasticsearch();
+// ✅ EXPORT THIS FUNCTION - So server.ts can import it
+export async function syncAndSaveEmails(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      console.log('📊 Setting up Elasticsearch...');
+      setupElasticsearch().catch(reject);
 
-    const imap = new Imap(imapConfig);
+      const imap = new Imap(imapConfig);
 
-    imap.once('ready', () => {
-      console.log('✅ Connected to Gmail!\n');
+      imap.once('ready', () => {
+        console.log('✅ Connected to Gmail!\n');
 
-      imap.openBox('INBOX', false, (err: any, box: any) => {
-        if (err) {
-          console.error('❌ Error:', err);
-          imap.end();
-          return;
-        }
+        imap.openBox('INBOX', false, (err: any, box: any) => {
+          if (err) {
+            console.error('❌ Error:', err);
+            imap.end();
+            reject(err);
+            return;
+          }
 
-        console.log(`📬 Total emails: ${box.messages.total}\n`);
+          console.log(`📬 Total emails: ${box.messages.total}\n`);
 
-        const start = Math.max(1, box.messages.total - 30);
-        const f = imap.fetch(`${start}:${box.messages.total}`, { bodies: '' });
+          const start = Math.max(1, box.messages.total - 30);
+          const f = imap.fetch(`${start}:${box.messages.total}`, { bodies: '' });
 
-        let processed = 0;
-        let completed = 0;
+          let processed = 0;
+          let completed = 0;
 
-        f.on('message', (msg: any, seqno: number) => {
-          processed++;
+          f.on('message', (msg: any, seqno: number) => {
+            processed++;
 
-          msg.on('body', (stream: any) => {
-            simpleParser(stream, async (err: any, parsed: any) => {
-              if (err) {
-                completed++;
-                if (completed === processed) finalize();
-                return;
-              }
-
-              try {
-                const subject = parsed.subject || 'No Subject';
-                const body = parsed.text || '';
-
-                // ✅ SECURITY CHECK: Skip sensitive emails
-                if (isSensitiveEmail(subject, body)) {
-                  skippedCount++;
-                  console.log(`⚠️ [SKIPPED - SENSITIVE] ${subject.substring(0, 40)}`);
+            msg.on('body', (stream: any) => {
+              simpleParser(stream, async (err: any, parsed: any) => {
+                if (err) {
                   completed++;
                   if (completed === processed) finalize();
                   return;
                 }
 
-                // Categorize email
-                const category = categorizeEmail(subject, body);
+                try {
+                  const subject = parsed.subject || 'No Subject';
+                  const body = parsed.text || '';
 
-                const email: EmailData = {
-                  messageId: parsed.messageId || `msg-${Date.now()}-${seqno}`,
-                  account: process.env.GMAIL1 || '',
-                  from: parsed.from?.text || 'Unknown',
-                  to: parsed.to?.text || '',
-                  subject: subject,
-                  body: body.substring(0, 2000),
-                  date: parsed.date ? new Date(parsed.date).toISOString() : new Date().toISOString(),
-                  folder: 'INBOX',
-                  category: category,
-                };
+                  // ✅ SECURITY CHECK: Skip sensitive emails
+                  if (isSensitiveEmail(subject, body)) {
+                    skippedCount++;
+                    console.log(`⚠️ [SKIPPED - SENSITIVE] ${subject.substring(0, 40)}`);
+                    completed++;
+                    if (completed === processed) finalize();
+                    return;
+                  }
 
-                emailCount++;
+                  // Categorize email
+                  const category = categorizeEmail(subject, body);
 
-                console.log(`✅ [${emailCount}] ${email.subject.substring(0, 35)}`);
-                console.log(`   📂 Category: ${email.category}`);
+                  const email: EmailData = {
+                    messageId: parsed.messageId || `msg-${Date.now()}-${seqno}`,
+                    account: process.env.GMAIL1 || '',
+                    from: parsed.from?.text || 'Unknown',
+                    to: parsed.to?.text || '',
+                    subject: subject,
+                    body: body.substring(0, 2000),
+                    date: parsed.date ? new Date(parsed.date).toISOString() : new Date().toISOString(),
+                    folder: 'INBOX',
+                    category: category,
+                  };
 
-                await saveEmail(email).catch(() => {});
-              } catch (error) {
-                console.error(`❌ Error:`, error);
-              }
+                  emailCount++;
 
-              completed++;
-              if (completed === processed) finalize();
+                  console.log(`✅ [${emailCount}] ${email.subject.substring(0, 35)}`);
+                  console.log(`   📂 Category: ${email.category}`);
+
+                  await saveEmail(email).catch(() => {});
+                } catch (error) {
+                  console.error(`❌ Error:`, error);
+                }
+
+                completed++;
+                if (completed === processed) finalize();
+              });
             });
           });
+
+          function finalize() {
+            console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log(`✅ Saved: ${emailCount} safe emails`);
+            console.log(`⚠️ Skipped: ${skippedCount} sensitive emails`);
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+            imap.end();
+            resolve();
+          }
         });
-
-        function finalize() {
-          console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          console.log(`✅ Saved: ${emailCount} safe emails`);
-          console.log(`⚠️ Skipped: ${skippedCount} sensitive emails`);
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-          imap.end();
-        }
       });
-    });
 
-    imap.once('error', (err: any) => {
-      console.error('❌ IMAP Error:', err.message);
-      process.exit(1);
-    });
+      imap.once('error', (err: any) => {
+        console.error('❌ IMAP Error:', err.message);
+        reject(err);
+      });
 
-    imap.once('end', () => {
-      console.log('✨ Refresh frontend: http://localhost:3001\n');
-      process.exit(0);
-    });
+      imap.once('end', () => {
+        console.log('✨ Sync completed!\n');
+      });
 
-    imap.connect();
-  } catch (error) {
-    console.error('❌ Error:', error);
-    process.exit(1);
-  }
+      imap.connect();
+    } catch (error) {
+      console.error('❌ Error:', error);
+      reject(error);
+    }
+  });
 }
 
-syncEmails().catch(console.error);
+// ✅ Allow running directly: npx ts-node src/sync-and-save.ts
+if (require.main === module) {
+  syncAndSaveEmails()
+    .then(() => {
+      console.log('✨ Refresh frontend: http://localhost:3001\n');
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error('❌ Sync failed:', error);
+      process.exit(1);
+    });
+}
