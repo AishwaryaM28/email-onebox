@@ -9,13 +9,20 @@ import {
   filterByAccount, 
   filterByCategory 
 } from './elasticsearch';
+import { syncAndSaveEmails } from './sync-and-save';
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// CORS Configuration
+// ✅ FIX 1: Remove trailing slash from Vercel URL
 app.use(cors({
-  origin: ['http://localhost:3001', 'http://localhost:3000', 'http://127.0.0.1:3001', 'http://127.0.0.1:3000'],
+  origin: [
+    'https://email-onebox-seven.vercel.app',  // ✅ NO trailing slash
+    'http://localhost:3001',
+    'http://localhost:3000',
+    'http://127.0.0.1:3001',
+    'http://127.0.0.1:3000'
+  ],
   methods: ['GET', 'POST'],
   credentials: true
 }));
@@ -35,6 +42,11 @@ app.get('/', (req, res) => {
       'GET /api/stats': 'Get statistics'
     }
   });
+});
+
+// ✅ FIX 2: Add health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
 });
 
 // Get all emails
@@ -163,8 +175,25 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
-// Start server
-app.listen(PORT, () => {
+// ✅ FIX 3: Add sync endpoint
+app.get('/api/sync', async (req, res) => {
+  try {
+    console.log('🔄 Manual sync triggered...');
+    await syncAndSaveEmails();
+    res.json({
+      success: true,
+      message: 'Email sync completed successfully'
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ✅ FIX 4: Start server and auto-sync on startup
+app.listen(PORT, async () => {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('   📧 EMAIL ONEBOX API SERVER 📧');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -175,6 +204,16 @@ app.listen(PORT, () => {
   console.log(`   GET  http://localhost:${PORT}/api/emails/search?q=query`);
   console.log(`   GET  http://localhost:${PORT}/api/emails/category/Interested`);
   console.log(`   GET  http://localhost:${PORT}/api/stats`);
+  console.log(`   GET  http://localhost:${PORT}/api/sync`);
   console.log('\n💡 Test in browser or Postman!');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  
+  // ✅ Auto-sync on startup
+  try {
+    console.log('🔄 Starting initial email sync...');
+    await syncAndSaveEmails();
+    console.log('✅ Initial sync completed!\n');
+  } catch (error: any) {
+    console.error('❌ Initial sync failed:', error.message);
+  }
 });
