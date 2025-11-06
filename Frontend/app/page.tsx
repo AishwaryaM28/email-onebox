@@ -20,6 +20,9 @@ interface Stats {
 
 const CATEGORIES = ['All', 'Interested', 'Meeting Booked', 'Not Interested', 'Spam', 'Out of Office']
 
+// ✅ FIX 1: Use environment variable with fallback
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+
 export default function Home() {
   const [emails, setEmails] = useState<Email[]>([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -27,14 +30,18 @@ export default function Home() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const API_BASE = 'https://email-onebox-backend-hs8s.onrender.com/ || http://localhost:3000'
-
+  // ✅ FIX 2: Fetch emails with error handling
   const fetchEmails = async (): Promise<void> => {
     try {
       setLoading(true)
-      const response = await fetch(`${API_BASE}/api/emails`)
+      const response = await fetch(${API_BASE}/api/emails)
+      
+      if (!response.ok) {
+        throw new Error(API error: ${response.status})
+      }
+      
       const data = await response.json()
-      setEmails(data.emails || [])
+      setEmails(data.emails || data || [])
     } catch (error) {
       console.error('Error fetching emails:', error)
       setEmails([])
@@ -43,11 +50,17 @@ export default function Home() {
     }
   }
 
+  // ✅ FIX 3: Fetch stats with error handling
   const fetchStats = async (): Promise<void> => {
     try {
-      const response = await fetch(`${API_BASE}/api/stats`)
+      const response = await fetch(${API_BASE}/api/stats)
+      
+      if (!response.ok) {
+        throw new Error(API error: ${response.status})
+      }
+      
       const data = await response.json()
-      setStats(data.statistics)
+      setStats(data.statistics || data)
     } catch (error) {
       console.error('Error fetching stats:', error)
     }
@@ -62,9 +75,14 @@ export default function Home() {
 
     try {
       setLoading(true)
-      const response = await fetch(`${API_BASE}/api/emails/search?q=${encodeURIComponent(searchQuery)}`)
+      const response = await fetch(${API_BASE}/api/emails/search?q=${encodeURIComponent(searchQuery)})
+      
+      if (!response.ok) {
+        throw new Error(API error: ${response.status})
+      }
+      
       const data = await response.json()
-      setEmails(data.emails || [])
+      setEmails(data.emails || data || [])
     } catch (error) {
       console.error('Error searching:', error)
     } finally {
@@ -82,9 +100,14 @@ export default function Home() {
 
     try {
       setLoading(true)
-      const response = await fetch(`${API_BASE}/api/emails/category/${category}`)
+      const response = await fetch(${API_BASE}/api/emails/category/${category})
+      
+      if (!response.ok) {
+        throw new Error(API error: ${response.status})
+      }
+      
       const data = await response.json()
-      setEmails(data.emails || [])
+      setEmails(data.emails || data || [])
     } catch (error) {
       console.error('Error filtering:', error)
     } finally {
@@ -213,7 +236,7 @@ export default function Home() {
                       <h3 className="text-lg font-bold text-gray-900 truncate">{email.subject}</h3>
                       <p className="text-sm text-gray-600 truncate mt-1">{email.from}</p>
                     </div>
-                    <span className={`px-4 py-1 rounded-full text-xs font-bold whitespace-nowrap ${getCategoryColor(email.category)}`}>
+                    <span className={px-4 py-1 rounded-full text-xs font-bold whitespace-nowrap ${getCategoryColor(email.category)}}>
                       {email.category}
                     </span>
                   </div>
